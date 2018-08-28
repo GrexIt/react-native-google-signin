@@ -40,7 +40,6 @@ import static co.apptailor.googlesignin.Utils.getSignInOptions;
 import static co.apptailor.googlesignin.Utils.getUserProperties;
 import static co.apptailor.googlesignin.Utils.scopesToString;
 
-
 public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
     private GoogleSignInClient _apiClient;
 
@@ -101,18 +100,17 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void configure(
-            final ReadableMap config,
-            final Promise promise
-    ) {
+    public void configure(final ReadableMap config, final Promise promise) {
         final ReadableArray scopes = config.hasKey("scopes") ? config.getArray("scopes") : Arguments.createArray();
         final String webClientId = config.hasKey("webClientId") ? config.getString("webClientId") : null;
         final boolean offlineAccess = config.hasKey("offlineAccess") && config.getBoolean("offlineAccess");
-        final boolean forceConsentPrompt = config.hasKey("forceConsentPrompt") && config.getBoolean("forceConsentPrompt");
+        final boolean forceConsentPrompt = config.hasKey("forceConsentPrompt")
+                && config.getBoolean("forceConsentPrompt");
         final String accountName = config.hasKey("accountName") ? config.getString("accountName") : null;
         final String hostedDomain = config.hasKey("hostedDomain") ? config.getString("hostedDomain") : null;
 
-        GoogleSignInOptions options = getSignInOptions(createScopesArray(scopes), webClientId, offlineAccess, forceConsentPrompt, accountName, hostedDomain);
+        GoogleSignInOptions options = getSignInOptions(createScopesArray(scopes), webClientId, offlineAccess,
+                forceConsentPrompt, accountName, hostedDomain);
         _apiClient = GoogleSignIn.getClient(getReactApplicationContext(), options);
         promise.resolve(true);
     }
@@ -152,7 +150,11 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
         try {
             GoogleSignInAccount account = result.getResult(ApiException.class);
             WritableMap params = getUserProperties(account);
-            new AccessTokenRetrievalTask(this).execute(params);
+            if (Build.VERSION.SDK_INT >= 11/* HONEYCOMB */) {
+                new AccessTokenRetrievalTask(this).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, params);
+            } else {
+                new AccessTokenRetrievalTask(this).execute(params);
+            }
         } catch (ApiException e) {
             int code = e.getStatusCode();
             promiseWrapper.reject(String.valueOf(code), GoogleSignInStatusCodes.getStatusCodeString(code));
@@ -190,9 +192,11 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
 
     private class RNGoogleSigninActivityEventListener extends BaseActivityEventListener {
         @Override
-        public void onActivityResult(Activity activity, final int requestCode, final int resultCode, final Intent intent) {
+        public void onActivityResult(Activity activity, final int requestCode, final int resultCode,
+                final Intent intent) {
             if (requestCode == RC_SIGN_IN) {
-                // The Task returned from this call is always completed, no need to attach a listener.
+                // The Task returned from this call is always completed, no need to attach a
+                // listener.
                 Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(intent);
                 handleSignInTaskResult(task);
             }
@@ -206,13 +210,12 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
             return;
         }
 
-        _apiClient.signOut()
-                .addOnCompleteListener(new OnCompleteListener<Void>() {
-                    @Override
-                    public void onComplete(@NonNull Task<Void> task) {
-                        handleSignOutOrRevokeAccessTask(task, promise);
-                    }
-                });
+        _apiClient.signOut().addOnCompleteListener(new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                handleSignOutOrRevokeAccessTask(task, promise);
+            }
+        });
     }
 
     private void handleSignOutOrRevokeAccessTask(@NonNull Task<Void> task, final Promise promise) {
@@ -231,13 +234,12 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
             return;
         }
 
-        _apiClient.revokeAccess()
-                .addOnCompleteListener(new OnCompleteListener<Void>() {
-                    @Override
-                    public void onComplete(@NonNull Task<Void> task) {
-                        handleSignOutOrRevokeAccessTask(task, promise);
-                    }
-                });
+        _apiClient.revokeAccess().addOnCompleteListener(new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                handleSignOutOrRevokeAccessTask(task, promise);
+            }
+        });
     }
 
     private static class AccessTokenRetrievalTask extends AsyncTask<WritableMap, Void, WritableMap> {
@@ -258,8 +260,7 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
             }
             try {
                 String token = GoogleAuthUtil.getToken(moduleInstance.getReactApplicationContext(),
-                        new Account(mail, "com.google"),
-                        scopesToString(result.getArray("scopes")));
+                        new Account(mail, "com.google"), scopesToString(result.getArray("scopes")));
                 result.putString("accessToken", token);
                 return result;
             } catch (Exception e) {
